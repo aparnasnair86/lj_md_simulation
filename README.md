@@ -1,6 +1,6 @@
 # Lennard-Jones Molecular Dynamics Simulation
 
-This project implements a simple Molecular Dynamics (MD) simulation of particles interacting via the Lennard-Jones potential. It uses the Velocity-Verlet integration scheme with periodic boundary conditions.
+This project implements a simple Molecular Dynamics (MD) simulation of particles interacting via the repulsive Lennard-Jones potential. It uses the Velocity-Verlet integration scheme with periodic boundary conditions.
 
 ## Features
 
