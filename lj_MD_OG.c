@@ -1,4 +1,4 @@
-// Code for performing Molecular Dynamic Simulation - June 2011
+// Code for performing Molecular Dynamic Simulation
 
 #include<stdio.h>
 #include<math.h>
@@ -87,10 +87,8 @@ int main(int argc, char *argv[]){
 	
 	//fprintf(stderr, "%f\t%f\t%f\n", lx,ly,lz); 
 
-	/* begin JAD */
-	//fpconf = fopen("Init_125_par.dat","r");
+	
 	fpconf = fopen("Init_125_par_new.dat","r");
-	/* end JAD */
 
 	fpw = fopen("Conf_out.dat","w");
 
@@ -123,32 +121,26 @@ int main(int argc, char *argv[]){
 	Trt = pow(T,1.0/2.0);
 	//printf("%d\n", N);
 
-	/* begin JAD */
+	
 	vxcum = 0.0;
-        vycum = 0.0;
-        vzcum = 0.0;
-	/* end JAD */
+    vycum = 0.0;
+    vzcum = 0.0;
+
 
 	for(i=1;i<=num;i++){
 	   vx[i]=gsl_ran_gaussian(m, Trt);
 	   vy[i]=gsl_ran_gaussian(m, Trt);
 	   vz[i]=gsl_ran_gaussian(m, Trt);
-    	 //  printf("%f\t%f\t%f\n", vx[i],vy[i],vz[i])
+       //  printf("%f\t%f\t%f\n", vx[i],vy[i],vz[i])
 	   
-	//COM Velocity//
+	  //COM Velocity//
 	  
-	/* begin JAD */	
-	   //vxcum = 0.0;
-	   //vycum = 0.0;
-	   //vzcum = 0.0;
-	/* end JAD */
-
 	   vxcum = vxcum + vx[i];
 	   vycum = vycum + vy[i];
 	   vzcum = vzcum + vz[i];
 	}
 	vxcum = vxcum/num;
-     	vycum = vycum/num;
+    vycum = vycum/num;
 	vzcum = vzcum/num;
 
 	for(i=1;i<=num;i++){	   	
@@ -350,30 +342,8 @@ int main(int argc, char *argv[]){
 	      vzold[i] = vz[i];
 	      
 
-	/* begin JAD */
-	      //vxcum = 0.0;
-	      //vycum = 0.0;
-	      //vzcum = 0.0;
-	      //
-	      //vxcum = vxcum + vx[i];
-	      //vycum = vycum + vy[i];
-	      //vzcum = vzcum + vz[i];
-	/* end JAD */
+	
 	   }
-	/* begin JAD */
-	   //vxcum = vxcum/num;
-	   //vycum = vycum/num;
-	   //vzcum = vzcum/num;
-	   //
-	   //for(i=1;i<=num;i++){	   	
-	   //   vx[i] = vx[i] - vxcum;
-	   //   vy[i] = vy[i] - vycum;
-	   //   vz[i] = vz[i] - vzcum;
-	   //  //printf("Si %f\t%f\t%f\t%f\t%f\t%f\n", x[i], y[i], z[i], vx[i], vy[i], vz[i]);
-	   //  //printf("Si %f\t%f\t%f\n", x[i] -lx*lround(x[i]/lx), y[i]-lx*lround(y[i]/lx), z[i]-lx*lround(z[i]/lx));
-	   //}
-	/* end JAD */
-
        // *************** Checked *********** Till here Fine ******************************************* //
 
 	   //THERMO OUTPUT
@@ -382,57 +352,38 @@ int main(int argc, char *argv[]){
 	     //exit(0);
 	     //CALCULATE THE POTENTIAL ENERGY AND KINETIC ENERGY
 	     ke = 0.0;
-	/* begin JAD */
 	     pe = 0.0;
-	/* end JAD */
 	     for(i=1;i<=num;i++){
-	/* begin JAD */
-	        //pe = 0.0;
-	/* end JAD */
-		  // printf("Si %f\t%f\t%f\n", x[i], y[i], z[i]);	   
-                for(j=1;j<=num;j++){
-		   if(i!=j){ 
-                     xij = (x[i] - x[j]) - lx*lround((x[i]-x[j])/lx);
-		     yij = (y[i] - y[j]) - ly*lround((y[i]-y[j])/ly);
-		     zij = (z[i] - z[j]) - lz*lround((z[i]-z[j])/lz);
-		    
-		     rsq = (xij*xij)+(yij*yij)+(zij*zij);
-	              r = sqrt(rsq); 
-		      //printf("%f\n", r);
+			 for(j=1;j<=num;j++){
+				 if(i!=j){ 
+				    xij = (x[i] - x[j]) - lx*lround((x[i]-x[j])/lx);
+					yij = (y[i] - y[j]) - ly*lround((y[i]-y[j])/ly);
+					zij = (z[i] - z[j]) - lz*lround((z[i]-z[j])/lz);
+					
+					rsq = (xij*xij)+(yij*yij)+(zij*zij);
+	                r = sqrt(rsq); 
 		       //i) Repulsive LJ potential Calculation  //
-		       if(rsq <= rc2sq){
-                         UljFT = 1.0/pow(r,12.0);
-			 UljST = 1.0/pow(r,6.0);
-			 Ulj  = 4*(UljFT - UljST + 0.25);
+		        if(rsq <= rc2sq){
+                   UljFT = 1.0/pow(r,12.0);
+				   UljST = 1.0/pow(r,6.0);
+				   Ulj  = 4*(UljFT - UljST + 0.25);
 		        //  printf("%f\t%f\n", r, Ulj);
 			}
-			/* begin JAD */
+			
 			else Ulj = 0.0;
-			/* end JAD */
+			
 		       
-		       pe = pe + Ulj ;
+		    pe = pe + Ulj ;
 		     }
 		}
 		
-	/* begin JAD */
-		//ke = ke + 0.5*vx[i]*vx[i];
+	
 		ke = ke + 0.5*(vx[i]*vx[i] + vy[i]*vy[i] + vz[i]*vz[i]);
-	/* end JAD */
-		//printf("%f\t%f\t%f\n", vx[i],vy[i],vz[i]);
-		//printf("%f\n",ke);
 		}
 
-	/* begin JAD */
+	
 		pe = pe / 2.0;
-	/* end JAD */
-
 	     printf("%d\t%f\t%f\t%f\n", mdstep, pe+ke, pe, ke);
 	   }
 	}
 }
-
-	   //DATA OUTPUT
-	 /*  if(mdstep%1000==0){
-	   }*/
-//	return 0;
-//}
