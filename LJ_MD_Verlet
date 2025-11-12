@@ -107,6 +107,7 @@ int main(int argc, char *argv[]) {
     }
 
     // ---------------- MD Loop -----------------
+    printf("Step \t Total Energy \t PE \t KE \n");
     for(mdstep=1; mdstep<=eqmdsteps; mdstep++){
 
         // Rebuild neighbor list every nlist_update_freq steps
