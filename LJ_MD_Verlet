@@ -1,0 +1,222 @@
+// --- MD Simulation with  Verlet Neighbor List --- //
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+#define eqmdsteps 50000
+#define dt 0.002
+#define rcut 1.1225
+#define rskin 0.3
+#define nlist_update_freq 20
+#define MAX_NEIGH 500
+
+long int lround(double x);
+
+int main(int argc, char *argv[]) {
+    int num, mdstep, i, j, k;
+    double T, lx = 8.0, ly = 8.0, lz = 8.0;
+    double xij, yij, zij, rsq, r, Fxpar, Fypar, Fzpar;
+    double UljFT, UljST, Ulj, pe, ke;
+    double rcutsq = rcut*rcut;
+    double rcutsq_skin = (rcut+rskin)*(rcut+rskin);
+
+    double *x, *y, *z, *vx, *vy, *vz, *Fx, *Fy, *Fz;
+    double *xold, *yold, *zold, *vxold, *vyold, *vzold, *Fxold, *Fyold, *Fzold;
+    int **neigh_list;
+    int *neigh_count;
+
+    const gsl_rng_type *P;
+    gsl_rng *m;
+
+    gsl_rng_env_setup();
+    P = gsl_rng_default;
+    m = gsl_rng_alloc(P);
+
+    if(argc < 3) {
+        printf("Usage: %s <No.of particles> <Temperature>\n", argv[0]);
+        exit(1);
+    }
+
+    num = atoi(argv[1]);
+    T = atof(argv[2]);
+
+    // Allocate arrays
+    x = calloc(num+1, sizeof(double));
+    y = calloc(num+1, sizeof(double));
+    z = calloc(num+1, sizeof(double));
+    vx = calloc(num+1, sizeof(double));
+    vy = calloc(num+1, sizeof(double));
+    vz = calloc(num+1, sizeof(double));
+    Fx = calloc(num+1, sizeof(double));
+    Fy = calloc(num+1, sizeof(double));
+    Fz = calloc(num+1, sizeof(double));
+    xold = calloc(num+1, sizeof(double));
+    yold = calloc(num+1, sizeof(double));
+    zold = calloc(num+1, sizeof(double));
+    vxold = calloc(num+1, sizeof(double));
+    vyold = calloc(num+1, sizeof(double));
+    vzold = calloc(num+1, sizeof(double));
+    Fxold = calloc(num+1, sizeof(double));
+    Fyold = calloc(num+1, sizeof(double));
+    Fzold = calloc(num+1, sizeof(double));
+
+    neigh_list = (int**)malloc((num+1)*sizeof(int*));
+    neigh_count = (int*)calloc(num+1, sizeof(int));
+    for(i=1; i<=num; i++)
+        neigh_list[i] = (int*)calloc(MAX_NEIGH, sizeof(int));
+
+    // ---------------- Initialize positions -----------------
+    FILE *fpconf = fopen("Init_125_par_new.dat","r");
+    if(fpconf==NULL) { printf("Error opening input file.\n"); exit(1); }
+    int ncheck; fscanf(fpconf,"%d\n\n",&ncheck);
+    for(i=1;i<=num;i++) fscanf(fpconf,"%lf\t%lf\t%lf\n",&x[i],&y[i],&z[i]);
+    fclose(fpconf);
+
+    // ---------------- Initialize velocities -----------------
+    double Trt = sqrt(T);
+    double vxcum=0, vycum=0, vzcum=0;
+    for(i=1;i<=num;i++){
+        vx[i]=gsl_ran_gaussian(m, Trt);
+        vy[i]=gsl_ran_gaussian(m, Trt);
+        vz[i]=gsl_ran_gaussian(m, Trt);
+        vxcum+=vx[i]; vycum+=vy[i]; vzcum+=vz[i];
+    }
+    vxcum/=num; vycum/=num; vzcum/=num;
+    for(i=1;i<=num;i++){ vx[i]-=vxcum; vy[i]-=vycum; vz[i]-=vzcum; }
+
+    // Copy initial positions & velocities
+    for(i=1;i<=num;i++){
+        xold[i]=x[i]; yold[i]=y[i]; zold[i]=z[i];
+        vxold[i]=vx[i]; vyold[i]=vy[i]; vzold[i]=vz[i];
+    }
+
+    // ---------------- Build initial Verlet neighbor list -----------------
+    for(i=1;i<=num;i++){
+        neigh_count[i]=0;
+        for(j=1;j<=num;j++){
+            if(i==j) continue;
+            xij=x[i]-x[j]-lx*lround((x[i]-x[j])/lx);
+            yij=y[i]-y[j]-ly*lround((y[i]-y[j])/ly);
+            zij=z[i]-z[j]-lz*lround((z[i]-z[j])/lz);
+            rsq=xij*xij+yij*yij+zij*zij;
+            if(rsq<rcutsq_skin && neigh_count[i]<MAX_NEIGH) neigh_list[i][neigh_count[i]++]=j;
+        }
+    }
+
+    // ---------------- MD Loop -----------------
+    for(mdstep=1; mdstep<=eqmdsteps; mdstep++){
+
+        // Rebuild neighbor list every nlist_update_freq steps
+        if(mdstep % nlist_update_freq == 0){
+            for(i=1;i<=num;i++){
+                neigh_count[i]=0;
+                for(j=1;j<=num;j++){
+                    if(i==j) continue;
+                    xij=x[i]-x[j]-lx*lround((x[i]-x[j])/lx);
+                    yij=y[i]-y[j]-ly*lround((y[i]-y[j])/ly);
+                    zij=z[i]-z[j]-lz*lround((z[i]-z[j])/lz);
+                    rsq=xij*xij+yij*yij+zij*zij;
+                    if(rsq<rcutsq_skin && neigh_count[i]<MAX_NEIGH)
+                        neigh_list[i][neigh_count[i]++]=j;
+                }
+            }
+        }
+
+        // --- Compute forces using neighbor list ---
+        for(i=1;i<=num;i++){
+            Fxpar=Fypar=Fzpar=0.0;
+            for(k=0;k<neigh_count[i];k++){
+                j=neigh_list[i][k];
+                xij=x[i]-x[j]-lx*lround((x[i]-x[j])/lx);
+                yij=y[i]-y[j]-ly*lround((y[i]-y[j])/ly);
+                zij=z[i]-z[j]-lz*lround((z[i]-z[j])/lz);
+                rsq=xij*xij+yij*yij+zij*zij;
+                if(rsq<rcutsq){
+                    r=sqrt(rsq);
+                    Fxpar+=4*((12/pow(r,14))-(6/pow(r,8)))*xij;
+                    Fypar+=4*((12/pow(r,14))-(6/pow(r,8)))*yij;
+                    Fzpar+=4*((12/pow(r,14))-(6/pow(r,8)))*zij;
+                }
+            }
+            Fxold[i]=Fxpar; Fyold[i]=Fypar; Fzold[i]=Fzpar;
+        }
+
+        // --- Integrate positions (Velocity Verlet) ---
+        for(i=1;i<=num;i++){
+            x[i]=xold[i]+vxold[i]*dt+0.5*Fxold[i]*dt*dt;
+            y[i]=yold[i]+vyold[i]*dt+0.5*Fyold[i]*dt*dt;
+            z[i]=zold[i]+vzold[i]*dt+0.5*Fzold[i]*dt*dt;
+
+            // Apply PBC
+            x[i]-=lx*floor(x[i]/lx);
+            y[i]-=ly*floor(y[i]/ly);
+            z[i]-=lz*floor(z[i]/lz);
+        }
+
+        // --- Compute new forces for velocity update ---
+        for(i=1;i<=num;i++){
+            Fxpar=Fypar=Fzpar=0.0;
+            for(k=0;k<neigh_count[i];k++){
+                j=neigh_list[i][k];
+                xij=x[i]-x[j]-lx*lround((x[i]-x[j])/lx);
+                yij=y[i]-y[j]-ly*lround((y[i]-y[j])/ly);
+                zij=z[i]-z[j]-lz*lround((z[i]-z[j])/lz);
+                rsq=xij*xij+yij*yij+zij*zij;
+                if(rsq<rcutsq){
+                    r=sqrt(rsq);
+                    Fxpar+=4*((12/pow(r,14))-(6/pow(r,8)))*xij;
+                    Fypar+=4*((12/pow(r,14))-(6/pow(r,8)))*yij;
+                    Fzpar+=4*((12/pow(r,14))-(6/pow(r,8)))*zij;
+                }
+            }
+            Fx[i]=Fxpar; Fy[i]=Fypar; Fz[i]=Fzpar;
+        }
+
+        // --- Update velocities ---
+        for(i=1;i<=num;i++){
+            vx[i]=vxold[i]+0.5*(Fxold[i]+Fx[i])*dt;
+            vy[i]=vyold[i]+0.5*(Fyold[i]+Fy[i])*dt;
+            vz[i]=vzold[i]+0.5*(Fzold[i]+Fz[i])*dt;
+
+            vxold[i]=vx[i]; vyold[i]=vy[i]; vzold[i]=vz[i];
+            xold[i]=x[i]; yold[i]=y[i]; zold[i]=z[i];
+        }
+
+        // --- Thermo output every 10 steps ---
+        if(mdstep%10==0){
+            ke=pe=0.0;
+            for(i=1;i<=num;i++){
+                ke+=0.5*(vx[i]*vx[i]+vy[i]*vy[i]+vz[i]*vz[i]);
+                for(k=0;k<neigh_count[i];k++){
+                    j=neigh_list[i][k];
+                    xij=x[i]-x[j]-lx*lround((x[i]-x[j])/lx);
+                    yij=y[i]-y[j]-ly*lround((y[i]-y[j])/ly);
+                    zij=z[i]-z[j]-lz*lround((z[i]-z[j])/lz);
+                    rsq=xij*xij+yij*yij+zij*zij;
+                    if(rsq<rcutsq){
+                        r=sqrt(rsq);
+                        UljFT=1/pow(r,12); UljST=1/pow(r,6); Ulj=4*(UljFT-UljST+0.25);
+                        pe+=Ulj;
+                    }
+                }
+            }
+            pe*=0.5;
+            printf("%d\t%f\t%f\t%f\n",mdstep,pe+ke,pe,ke);
+        }
+    }
+
+    gsl_rng_free(m);
+    for(i=1;i<=num;i++) free(neigh_list[i]);
+    free(neigh_list); free(neigh_count);
+    free(x); free(y); free(z);
+    free(vx); free(vy); free(vz);
+    free(Fx); free(Fy); free(Fz);
+    free(xold); free(yold); free(zold);
+    free(vxold); free(vyold); free(vzold);
+    free(Fxold); free(Fyold); free(Fzold);
+
+    return 0;
+}
